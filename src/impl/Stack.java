@@ -7,7 +7,7 @@ import interfaces.IStack;
 
 public class Stack implements IStack {
     private Object[] data;      //reference to the shared array
-    private int top;            //index of the top element
+    private int top;            //count of elements in this stack
     private int start;          //where this stack begins in the array
     private int capacity;       //max number of elements allowed
     private boolean isFirst;    //true if this is the first stack in the double stack
@@ -15,7 +15,7 @@ public class Stack implements IStack {
     public Stack(Object[] sharedArray, boolean isFirst, int capacity) {
         this.data = sharedArray;
         this.top = 0;
-        this.start = isFirst ? 0 : sharedArray.length-1; //Either it's the first stack bottom at 0 or the second stack bottom at the last index
+        this.start = isFirst ? 0 : sharedArray.length - 1; //Either it's the first stack bottom at 0 or the second stack bottom at the last index
         this.capacity = capacity;
         this.isFirst = isFirst;
     }
@@ -44,7 +44,7 @@ public class Stack implements IStack {
         top--;
 
         if (isFirst) {
-            poppedItem = data[start+top];
+            poppedItem = data[start + top];
             data[start + top] = null;
         } else {
             poppedItem = data[start - top];
@@ -66,12 +66,10 @@ public class Stack implements IStack {
             topElement = data[start - top + 1];
         }
         return topElement;
-
     }
 
     @Override
     public int size() {
-
         return top;
     }
 
@@ -84,7 +82,4 @@ public class Stack implements IStack {
     public void clear() {
         top = 0;
     }
-
-
-    
 }
