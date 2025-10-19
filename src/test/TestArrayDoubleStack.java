@@ -84,6 +84,4 @@ public class TestArrayDoubleStack extends AbstractFactoryClient {
         }
         assertThrows(common.StackOverflowException.class, () -> secondStack.push("overflow"));
     }
-
-    
 }

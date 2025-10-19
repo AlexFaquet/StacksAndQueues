@@ -5,13 +5,14 @@ import interfaces.IDoubleStack;
 import interfaces.IStack;
 import common.QueueEmptyException;
 import common.QueueFullException;
+import common.StackEmptyException;
+import common.StackOverflowException;
 
 public class DoubleStackQueue implements IQueue {
     private IDoubleStack doubleStack;
     private IStack inputStack;
     private IStack outputStack;
     private int capacity;
-     
 
     public DoubleStackQueue(int maxSize) {
         doubleStack = new DoubleStack(maxSize);
@@ -22,12 +23,23 @@ public class DoubleStackQueue implements IQueue {
 
     @Override
     public void enqueue(Object element) throws QueueFullException {
-        if (inputStack.size() == capacity) {
+        if (size() == capacity) {
             throw new QueueFullException();
         }
-        
         try {
             inputStack.push(element);
+        } catch (StackOverflowException e) {
+            //Input half is full. If output is empty, transfer to free space.
+            if (outputStack.isEmpty()) {
+                transferInputToOutput();
+                try {
+                    inputStack.push(element);
+                } catch (StackOverflowException again) {
+                    throw new QueueFullException();
+                }
+        } else {
+            throw new QueueFullException();
+            }
         }
     }
 
@@ -40,13 +52,8 @@ public class DoubleStackQueue implements IQueue {
 
 
         if (outputStack.isEmpty()) {
-            try {
-                while (!inputStack.isEmpty()) {
-                    outputStack.push(inputStack.pop());
-                }
-            } catch (Exception e) {
-                //These should not happen if my logic is correct,
-                //but we handle them safely.
+            transferInputToOutput();
+            if (outputStack.isEmpty()) {
                 throw new QueueEmptyException();
             }
         }
@@ -73,5 +80,21 @@ public class DoubleStackQueue implements IQueue {
     public void clear() {
         inputStack.clear();
         outputStack.clear();
+    }
+
+    private void transferInputToOutput() {
+        //Move all items from input to output (reverses order)
+        while (!inputStack.isEmpty()) {
+            try {
+                Object x = inputStack.pop();
+                outputStack.push(x);
+            } catch (StackEmptyException e) {
+                //input became empty; done
+                break;
+            } catch (StackOverflowException e) {
+                //output half is full; stop transferring
+                break;
+            }
+        }
     }
 }

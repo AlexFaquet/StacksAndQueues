@@ -20,5 +20,5 @@ public class DoubleStack implements IDoubleStack {
     @Override
     public Stack getSecondStack() {
         return secondStack;
-    }    
+    }
 }
