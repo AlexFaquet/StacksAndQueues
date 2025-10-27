@@ -80,6 +80,16 @@ public class Stack implements IStack {
 
     @Override
     public void clear() {
+        if (isFirst) {
+            for (int i = 0; i < top; i++) {
+                data[start + i] = null;
+            }
+        } else {
+            for (int i = 0; i < top; i++) {
+                data[start - i] = null;
+            }
+        }
         top = 0;
     }
+
 }

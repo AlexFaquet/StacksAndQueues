@@ -18,7 +18,7 @@ public class DoubleStackQueue implements IQueue {
         doubleStack = new DoubleStack(maxSize);
         inputStack = doubleStack.getFirstStack();
         outputStack = doubleStack.getSecondStack();
-        capacity = maxSize;
+        capacity = 2 * (maxSize / 2);
     }
 
     @Override

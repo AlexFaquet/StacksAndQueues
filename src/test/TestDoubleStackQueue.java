@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import common.AbstractFactoryClient;
 import common.QueueEmptyException;
@@ -49,8 +48,11 @@ public class TestDoubleStackQueue extends AbstractFactoryClient {
 
     // ========== BASIC BEHAVIOR ==========
 
+    /**
+     * Basic FIFO test with even capacity.
+     * @throws Exception
+     */
     @Test
-    @DisplayName("FIFO order for a simple batch (even capacity)")
     void fifoBasicEven() throws Exception {
         IQueue q = new DoubleStackQueue(10); // halves 5 + 5
         enqueueMany(q, 1, 5);
@@ -63,8 +65,11 @@ public class TestDoubleStackQueue extends AbstractFactoryClient {
         assertTrue(q.isEmpty());
     }
 
+    /**
+     * Basic FIFO test with odd capacity.
+     * @throws Exception
+     */
     @Test
-    @DisplayName("Transfer happens once per batch: enqueue 1..5, dequeue 1..5")
     void transferOncePerBatch() throws Exception {
         IQueue q = new DoubleStackQueue(10);
         enqueueMany(q, 1, 5);
@@ -75,8 +80,10 @@ public class TestDoubleStackQueue extends AbstractFactoryClient {
         assertTrue(q.isEmpty());
     }
 
+    /**
+     * Interleaving enqueues and dequeues preserves FIFO order.
+     */
     @Test
-    @DisplayName("Interleaved enqueue/dequeue maintains FIFO")
     void interleavedOps() throws Exception {
         IQueue q = new DoubleStackQueue(10);
         q.enqueue("A");
@@ -95,15 +102,19 @@ public class TestDoubleStackQueue extends AbstractFactoryClient {
 
     // ========== EXCEPTIONS ==========
 
+    /**
+     * Dequeue from an empty queue throws QueueEmptyException.
+     */
     @Test
-    @DisplayName("Dequeue on empty queue throws QueueEmptyException")
     void dequeueEmptyThrows() {
         IQueue q = new DoubleStackQueue(6);
         assertThrows(QueueEmptyException.class, q::dequeue);
     }
 
+    /**
+     * clear() empties the queue and allows subsequent reuse.
+     */
     @Test
-    @DisplayName("Clear empties the queue and allows reuse")
     void clearAllowsReuse() throws Exception {
         IQueue q = new DoubleStackQueue(10);
         enqueueMany(q, 1, 6);
@@ -120,8 +131,10 @@ public class TestDoubleStackQueue extends AbstractFactoryClient {
 
     // ========== CAPACITY / FULLNESS (EVEN) ==========
 
+    /**
+     * Can fill to full capacity when total size is even and FIFO is preserved.
+     */
     @Test
-    @DisplayName("Even capacity: can enqueue up to maxSize without dequeues (via mid-transfer)")
     void fullEvenCapacity() throws Exception {
         // With maxSize=10, halves are 5 and 5.
         // We should be able to enqueue 10 items with no dequeues:
@@ -141,8 +154,10 @@ public class TestDoubleStackQueue extends AbstractFactoryClient {
 
     // ========== CAPACITY / FULLNESS (ODD) ==========
 
+    /**
+     * Tests fullness behaviour when the total capacity is odd and no dequeues occur.
+     */
     @Test
-    @DisplayName("Odd capacity: one slot is effectively unusable without dequeues; max enqueues without dequeues = 2 * floor(n/2)")
     void fullOddCapacityWithoutDequeues() throws Exception {
         // With maxSize = 9, halves become 4 each (due to integer division in DoubleStack),
         // leaving one slot unused in the middle.
@@ -182,8 +197,10 @@ public class TestDoubleStackQueue extends AbstractFactoryClient {
 
     // ========== TRANSFER LOGIC DETAILS ==========
 
+    /**
+     * Ensures transfer from input to output occurs only when output is empty.
+     */
     @Test
-    @DisplayName("Dequeue triggers transfer only when output is empty; otherwise pops directly")
     void transferOnlyWhenNeeded() throws Exception {
         IQueue q = new DoubleStackQueue(10);
         // Enqueue 1..5, then dequeue twice (1,2), output now has [3,4,5]
@@ -206,8 +223,10 @@ public class TestDoubleStackQueue extends AbstractFactoryClient {
         assertTrue(q.isEmpty());
     }
 
+    /**
+     * size() correctly reflects items across both internal stacks.
+     */
     @Test
-    @DisplayName("Size reflects sum of both stacks across transfers and interleaving")
     void sizeReflectsBothStacks() throws Exception {
         IQueue q = new DoubleStackQueue(10);
         assertEquals(0, q.size());
@@ -234,8 +253,10 @@ public class TestDoubleStackQueue extends AbstractFactoryClient {
 
     // ========== ROBUSTNESS / EDGE ==========
 
+    /**
+     * Draining the queue then attempting to dequeue throws QueueEmptyException.
+     */
     @Test
-    @DisplayName("Dequeue repeatedly until empty, then ensure next dequeue throws")
     void drainThenThrow() throws Exception {
         IQueue q = new DoubleStackQueue(6);
         enqueueMany(q, 10, 14); // 5 items
@@ -244,8 +265,10 @@ public class TestDoubleStackQueue extends AbstractFactoryClient {
         assertThrows(QueueEmptyException.class, q::dequeue);
     }
 
+    /**
+     * clear() is idempotent and queue remains usable after multiple clears.
+     */
     @Test
-    @DisplayName("Multiple clears do not break subsequent usage")
     void multipleClears() throws Exception {
         IQueue q = new DoubleStackQueue(10);
         enqueueMany(q, 1, 3);
@@ -259,4 +282,70 @@ public class TestDoubleStackQueue extends AbstractFactoryClient {
         q.clear();
         assertTrue(q.isEmpty());
     }
+
+    /**
+     * Enqueue must fail when input is full and output still contains items.
+     */
+    @Test
+    void enqueueFailsWhenOutputHasDataAndInputIsFull() throws Exception {
+        var q = new impl.DoubleStackQueue(10); // 5+5 halves
+        // Fill input
+        for (int i = 1; i <= 5; i++) {
+            q.enqueue(i);
+        }
+        // Partially drain to move some into output (transfer), then leave some there
+        assertEquals(1, q.dequeue()); // transfer happens
+        assertEquals(2, q.dequeue()); // output now holds [3,4,5]
+        // Refill input to full again
+        q.enqueue(6); q.enqueue(7); q.enqueue(8); q.enqueue(9); q.enqueue(10);
+        // Input is full (5), output not empty (3 items) -> no transfer allowed -> enqueue must fail
+        assertThrows(QueueFullException.class, () -> q.enqueue(11));
+    }
+
+    /**
+     * Repeated interleaving over many rounds preserves FIFO ordering.
+     */
+    @Test
+    void longInterleavingRemainsFifo() throws Exception {
+        var q = new impl.DoubleStackQueue(6); // 3+3 halves
+        for (int round = 0; round < 20; round++) {
+            q.enqueue(round * 3); q.enqueue(round * 3 + 1); q.enqueue(round * 3 + 2);
+            assertEquals(round * 3, q.dequeue());
+            q.enqueue(1000 + round);
+            assertEquals(round * 3 + 1, q.dequeue());
+            assertEquals(round * 3 + 2, q.dequeue());
+            assertEquals(1000 + round, q.dequeue());
+            assertTrue(q.isEmpty());
+        }
+    }
+
+    /**
+     * Ensures size never exceeds the reachable capacity when total size is odd.
+     */
+    @Test
+    void sizeNeverExceedsReachableCapacityOdd() throws Exception {
+        var q = new impl.DoubleStackQueue(9); // reachable=8 without dequeues
+        for (int i = 0; i < 8; i++) {
+            q.enqueue(i);
+        }
+        assertEquals(8, q.size());
+        // Next enqueue must fail (no room to transfer because output not empty)
+        assertThrows(QueueFullException.class, () -> q.enqueue(999));
+    }
+
+
+    /**
+     * Verifies enqueueing null values is allowed and they dequeue as null.
+     */
+    @Test
+    void enqueueNullIsAllowedAndDequeuedAsNull() throws Exception {
+        IQueue q = new impl.DoubleStackQueue(4);
+        q.enqueue(null);
+        q.enqueue("X");
+        assertEquals(null, q.dequeue());
+        assertEquals("X", q.dequeue());
+    }
+
+
+
 }
