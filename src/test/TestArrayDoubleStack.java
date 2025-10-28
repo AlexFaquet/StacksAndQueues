@@ -164,7 +164,11 @@ public class TestArrayDoubleStack extends AbstractFactoryClient {
         assertThrows(common.StackOverflowException.class, () -> b.push(99));
     }
 
-
+    /**
+     * Each stack is capped at floor(maxSize/2).
+     * @param num
+     * @throws Exception
+     */
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 17})
     void eachStackCappedAtFloorHalf(int num) throws Exception {

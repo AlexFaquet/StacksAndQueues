@@ -50,7 +50,6 @@ public class TestDoubleStackQueue extends AbstractFactoryClient {
         }
     }
 
-    // ========== BASIC BEHAVIOR ==========
 
     /**
      * Basic FIFO test with even capacity.
@@ -104,7 +103,6 @@ public class TestDoubleStackQueue extends AbstractFactoryClient {
         assertTrue(q.isEmpty());
     }
 
-    // ========== EXCEPTIONS ==========
 
     /**
      * Dequeue from an empty queue throws QueueEmptyException.
@@ -133,7 +131,6 @@ public class TestDoubleStackQueue extends AbstractFactoryClient {
         assertTrue(q.isEmpty());
     }
 
-    // ========== CAPACITY / FULLNESS (EVEN) ==========
 
     /**
      * Can fill to full capacity when total size is even and FIFO is preserved.
@@ -156,43 +153,40 @@ public class TestDoubleStackQueue extends AbstractFactoryClient {
         assertTrue(q.isEmpty());
     }
 
-    // ========== CAPACITY / FULLNESS (ODD) ==========
 
-/**
- * With internal DoubleStack sized to 2*Q, the queue can accept Q enqueues
- * without any dequeues. The fullness guard is purely size==capacity.
- */
-@Test
-void fullCapacityWithoutDequeues() throws Exception {
-    IQueue q = new DoubleStackQueue(9); // internal array length = 18
+    /**
+     * With internal DoubleStack sized to 2*Q, the queue can accept Q enqueues
+     * without any dequeues. The fullness guard is purely size==capacity.
+     */
+    @Test
+    void fullCapacityWithoutDequeues() throws Exception {
+        IQueue q = new DoubleStackQueue(9); // internal array length = 18
 
-    // Can enqueue up to capacity (9) without any dequeues
-    enqueueMany(q, 1, 9);
-    assertEquals(9, q.size());
+        // Can enqueue up to capacity (9) without any dequeues
+        enqueueMany(q, 1, 9);
+        assertEquals(9, q.size());
 
-    // Next enqueue is over logical capacity, so it should throw
-    assertThrows(QueueFullException.class, () -> q.enqueue(10));
+        // Next enqueue is over logical capacity, so it should throw
+        assertThrows(QueueFullException.class, () -> q.enqueue(10));
 
-    // Dequeue a couple (FIFO)
-    assertEquals(1, q.dequeue());
-    assertEquals(2, q.dequeue());
-    assertEquals(7, q.size());
+        // Dequeue a couple (FIFO)
+        assertEquals(1, q.dequeue());
+        assertEquals(2, q.dequeue());
+        assertEquals(7, q.size());
 
-    // We can enqueue until we hit capacity again (back to 9)
-    q.enqueue(10);
-    q.enqueue(11);
-    assertEquals(9, q.size());
-    assertThrows(QueueFullException.class, () -> q.enqueue(12));
+        // We can enqueue until we hit capacity again (back to 9)
+        q.enqueue(10);
+        q.enqueue(11);
+        assertEquals(9, q.size());
+        assertThrows(QueueFullException.class, () -> q.enqueue(12));
 
-    // Drain the rest in strict FIFO order: 3..9, then 10, 11
-    for (int v = 3; v <= 11; v++) {
-        assertEquals(v, q.dequeue());
+        // Drain the rest in strict FIFO order: 3..9, then 10, 11
+        for (int v = 3; v <= 11; v++) {
+            assertEquals(v, q.dequeue());
+        }
+        assertTrue(q.isEmpty());
     }
-    assertTrue(q.isEmpty());
-}
 
-
-    // ========== TRANSFER LOGIC DETAILS ==========
 
     /**
      * Ensures transfer from input to output occurs only when output is empty.
@@ -248,7 +242,6 @@ void fullCapacityWithoutDequeues() throws Exception {
         assertTrue(q.isEmpty());
     }
 
-    // ========== ROBUSTNESS / EDGE ==========
 
     /**
      * Draining the queue then attempting to dequeue throws QueueEmptyException.
@@ -368,6 +361,11 @@ void fullCapacityWithoutDequeues() throws Exception {
         assertEquals("X", q.dequeue());
     }
 
+    /**
+     * Enqueueing exactly to capacity works, then next enqueue is rejected.
+     * @param qSize
+     * @throws Exception
+     */
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 17})
     void fillExactlyToCapacityThenRejectNext(int qSize) throws Exception {
@@ -383,6 +381,11 @@ void fullCapacityWithoutDequeues() throws Exception {
         assertTrue(q.isEmpty());
     }
 
+    /**
+     * Enqueueing up to capacity works when output has k items.
+     * @param k
+     * @throws Exception
+     */
     @ParameterizedTest
     @ValueSource(ints = {2, 3, 4, 5})
     void enqueueStopsAtLogicalCapacityWhenOutputHasK(int k) throws Exception {
@@ -413,6 +416,11 @@ void fullCapacityWithoutDequeues() throws Exception {
         assertTrue(q.isEmpty());
     }
 
+    /**
+     * Single transfer per wave is observable.
+     * @param qSize
+     * @throws Exception
+     */
     @ParameterizedTest
     @ValueSource(ints = {5, 10})
     void singleTransferPerWaveObservable(int qSize) throws Exception {

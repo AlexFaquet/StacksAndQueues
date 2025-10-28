@@ -5,8 +5,6 @@ import interfaces.IDoubleStack;
 import interfaces.IStack;
 import common.QueueEmptyException;
 import common.QueueFullException;
-import common.StackEmptyException;
-import common.StackOverflowException;
 
 public class DoubleStackQueue implements IQueue {
     private IDoubleStack doubleStack;
@@ -33,10 +31,10 @@ public class DoubleStackQueue implements IQueue {
         }
         try {
             inputStack.push(element);
-        } catch (StackOverflowException impossible) {
-            // With 2*Q internal and the size guard, this shouldn't happen.
-            // You can either keep this as defensive or replace with an assert.
-            throw new QueueFullException();
+        } catch (common.StackOverflowException impossible) {
+            // Should never happen under 2*Q internal + size guard:
+            // turning this into a hard failure is clearer than mis-mapping to QueueFull.
+            throw new IllegalStateException("Unexpected overflow in enqueue()", impossible);
         }
     }
 
@@ -47,25 +45,29 @@ public class DoubleStackQueue implements IQueue {
      */
     @Override
     public Object dequeue() throws QueueEmptyException {
-        // Empty queue if both stacks are empty
+        // If both stacks are empty, the queue is empty.
         if (inputStack.isEmpty() && outputStack.isEmpty()) {
             throw new QueueEmptyException();
         }
 
-        // If output is empty, pour input -> output to restore FIFO
+        // If output is empty, transfer input -> output to restore FIFO order.
         if (outputStack.isEmpty()) {
             while (!inputStack.isEmpty()) {
+                Object x;
                 try {
-                    outputStack.push(inputStack.pop());
-                    //In these exceptions, I am constrained by the interface to throw only QueueEmptyException.
-                    //So for cases where I need to throw StackEmptyException or StackOverflowException, I catch them and re-throw as QueueEmptyException.
-                } catch (StackEmptyException e) {
-                    throw new QueueEmptyException(); // Defensive; shouldn't happen
-                } catch (StackOverflowException e) {
-                    throw new QueueEmptyException(); // Defensive; shouldn't happen
+                    x = inputStack.pop(); // may throw StackEmptyException
+                } catch (common.StackEmptyException e) {
+                    // Inconsistent: input said non-empty; treat as internal bug.
+                    throw new AssertionError("Input non-empty but pop() failed", e);
+                }
+                try {
+                    outputStack.push(x);   // may throw StackOverflowException
+                } catch (common.StackOverflowException e) {
+                    // Impossible under 2*Q-internal + size()==capacity guard.
+                    throw new IllegalStateException("Unexpected overflow during transfer", e);
                 }
             }
-            // If both were empty, still empty
+            // Defensive: if nothing moved, still empty.
             if (outputStack.isEmpty()) {
                 throw new QueueEmptyException();
             }
@@ -73,13 +75,11 @@ public class DoubleStackQueue implements IQueue {
 
         try {
             return outputStack.pop();
-        } catch (StackEmptyException e) {
-            // Defensive: output said non-empty but pop failed
+        } catch (common.StackEmptyException e) {
+            // Defensive: output claimed non-empty but pop failed — surface queue-level empty.
             throw new QueueEmptyException();
         }
     }
-
-
 
     /**
      * Returns the number of elements in the queue.
@@ -107,5 +107,4 @@ public class DoubleStackQueue implements IQueue {
         inputStack.clear();
         outputStack.clear();
     }
-
 }
