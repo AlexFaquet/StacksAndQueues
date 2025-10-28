@@ -15,12 +15,17 @@ public class DoubleStackQueue implements IQueue {
     private int capacity;
 
     public DoubleStackQueue(int maxSize) {
-        doubleStack = new DoubleStack(maxSize);
+        doubleStack = new DoubleStack(2 * maxSize);
         inputStack = doubleStack.getFirstStack();
         outputStack = doubleStack.getSecondStack();
-        capacity = 2 * (maxSize / 2);
+        capacity = maxSize;
     }
 
+    /**
+     * Enqueues an element at the back of the queue.
+     * @param element the element to add
+     * @throws QueueFullException if the queue is full
+     */
     @Override
     public void enqueue(Object element) throws QueueFullException {
         if (size() == capacity) {
@@ -28,31 +33,39 @@ public class DoubleStackQueue implements IQueue {
         }
         try {
             inputStack.push(element);
-        } catch (StackOverflowException e) {
-            //Input half is full. If output is empty, transfer to free space.
-            if (outputStack.isEmpty()) {
-                transferInputToOutput();
-                try {
-                    inputStack.push(element);
-                } catch (StackOverflowException again) {
-                    throw new QueueFullException();
-                }
-        } else {
+        } catch (StackOverflowException impossible) {
+            // With 2*Q internal and the size guard, this shouldn't happen.
+            // You can either keep this as defensive or replace with an assert.
             throw new QueueFullException();
-            }
         }
     }
 
+    /**
+     * Dequeues an element from the front of the queue.
+     * @return the dequeued element
+     * @throws QueueEmptyException if the queue is empty
+     */
     @Override
     public Object dequeue() throws QueueEmptyException {
-        //if both stacks are empty, queue is empty.
+        // Empty queue if both stacks are empty
         if (inputStack.isEmpty() && outputStack.isEmpty()) {
             throw new QueueEmptyException();
         }
 
-
+        // If output is empty, pour input -> output to restore FIFO
         if (outputStack.isEmpty()) {
-            transferInputToOutput();
+            while (!inputStack.isEmpty()) {
+                try {
+                    outputStack.push(inputStack.pop());
+                    //In these exceptions, I am constrained by the interface to throw only QueueEmptyException.
+                    //So for cases where I need to throw StackEmptyException or StackOverflowException, I catch them and re-throw as QueueEmptyException.
+                } catch (StackEmptyException e) {
+                    throw new QueueEmptyException(); // Defensive; shouldn't happen
+                } catch (StackOverflowException e) {
+                    throw new QueueEmptyException(); // Defensive; shouldn't happen
+                }
+            }
+            // If both were empty, still empty
             if (outputStack.isEmpty()) {
                 throw new QueueEmptyException();
             }
@@ -60,41 +73,39 @@ public class DoubleStackQueue implements IQueue {
 
         try {
             return outputStack.pop();
-        } catch (Exception e) {
-            //Again, this should not happen but we'll rethrow a queue-level exception
+        } catch (StackEmptyException e) {
+            // Defensive: output said non-empty but pop failed
             throw new QueueEmptyException();
         }
     }
 
+
+
+    /**
+     * Returns the number of elements in the queue.
+     * @return the size of the queue
+     */
     @Override
     public int size() {
         return (outputStack.size() + inputStack.size());
     }
 
+    /**
+     * Checks if the queue is empty.
+     * @return true if the queue is empty, false otherwise
+     */
     @Override
     public boolean isEmpty() {
         return (inputStack.isEmpty() && outputStack.isEmpty());
     }
 
+    /**
+     * Clears the queue.
+     */
     @Override
     public void clear() {
         inputStack.clear();
         outputStack.clear();
     }
 
-    private void transferInputToOutput() {
-        //Move all items from input to output (reverses order)
-        while (!inputStack.isEmpty()) {
-            try {
-                Object x = inputStack.pop();
-                outputStack.push(x);
-            } catch (StackEmptyException e) {
-                //input became empty; done
-                break;
-            } catch (StackOverflowException e) {
-                //output half is full; stop transferring
-                break;
-            }
-        }
-    }
 }

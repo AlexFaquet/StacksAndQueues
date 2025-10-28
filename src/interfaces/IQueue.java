@@ -2,6 +2,7 @@ package interfaces;
 
 import common.QueueEmptyException;
 import common.QueueFullException;
+import common.StackOverflowException;
 
 /**
  * Simple queue interface.
@@ -22,6 +23,7 @@ public interface IQueue {
      * 
      * @return the element removed
      * @throws QueueEmptyException if the queue is empty
+     * @throws StackOverflowException
      */
     Object dequeue() throws QueueEmptyException;
 

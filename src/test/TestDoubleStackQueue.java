@@ -9,9 +9,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
 import common.AbstractFactoryClient;
 import common.QueueEmptyException;
 import common.QueueFullException;
+import common.StackOverflowException;
 import impl.DoubleStackQueue;
 import interfaces.IQueue;
 
@@ -32,7 +36,7 @@ public class TestDoubleStackQueue extends AbstractFactoryClient {
     }
 
     // ---------- helpers ----------
-    private static List<Object> dequeueAll(IQueue q) throws QueueEmptyException {
+    private static List<Object> dequeueAll(IQueue q) throws QueueEmptyException, StackOverflowException {
         List<Object> out = new ArrayList<>();
         while (!q.isEmpty()) {
             out.add(q.dequeue());
@@ -54,7 +58,7 @@ public class TestDoubleStackQueue extends AbstractFactoryClient {
      */
     @Test
     void fifoBasicEven() throws Exception {
-        IQueue q = new DoubleStackQueue(10); // halves 5 + 5
+        IQueue q = new DoubleStackQueue(10);
         enqueueMany(q, 1, 5);
         assertEquals(5, q.size());
         assertEquals(1, q.dequeue());
@@ -136,7 +140,7 @@ public class TestDoubleStackQueue extends AbstractFactoryClient {
      */
     @Test
     void fullEvenCapacity() throws Exception {
-        // With maxSize=10, halves are 5 and 5.
+        // With maxSize=10, internal DoubleStack has size 20 (10+10 halves).
         // We should be able to enqueue 10 items with no dequeues:
         // - fill input to 5
         // - next enqueue triggers transfer to output (since output is empty)
@@ -154,46 +158,39 @@ public class TestDoubleStackQueue extends AbstractFactoryClient {
 
     // ========== CAPACITY / FULLNESS (ODD) ==========
 
-    /**
-     * Tests fullness behaviour when the total capacity is odd and no dequeues occur.
-     */
-    @Test
-    void fullOddCapacityWithoutDequeues() throws Exception {
-        // With maxSize = 9, halves become 4 each (due to integer division in DoubleStack),
-        // leaving one slot unused in the middle.
-        // Without any dequeues, the maximum number of enqueues we can reach is 8.
-        IQueue q = new DoubleStackQueue(9);
+/**
+ * With internal DoubleStack sized to 2*Q, the queue can accept Q enqueues
+ * without any dequeues. The fullness guard is purely size==capacity.
+ */
+@Test
+void fullCapacityWithoutDequeues() throws Exception {
+    IQueue q = new DoubleStackQueue(9); // internal array length = 18
 
-        // Enqueue 8 should be fine…
-        enqueueMany(q, 1, 8);
-        assertEquals(8, q.size());
+    // Can enqueue up to capacity (9) without any dequeues
+    enqueueMany(q, 1, 9);
+    assertEquals(9, q.size());
 
-        // 9th enqueue (without dequeues) should throw, because input is full and output not empty
-        assertThrows(QueueFullException.class, () -> q.enqueue(9));
+    // Next enqueue is over logical capacity, so it should throw
+    assertThrows(QueueFullException.class, () -> q.enqueue(10));
 
-        // Dequeue a couple and ensure FIFO
-        assertEquals(1, q.dequeue());
-        assertEquals(2, q.dequeue());
+    // Dequeue a couple (FIFO)
+    assertEquals(1, q.dequeue());
+    assertEquals(2, q.dequeue());
+    assertEquals(7, q.size());
 
-        assertThrows(QueueFullException.class, () -> q.enqueue(9));
-        assertThrows(QueueFullException.class, () -> q.enqueue(10));
+    // We can enqueue until we hit capacity again (back to 9)
+    q.enqueue(10);
+    q.enqueue(11);
+    assertEquals(9, q.size());
+    assertThrows(QueueFullException.class, () -> q.enqueue(12));
 
-        // Now drain output (3,4)
-        assertEquals(3, q.dequeue());
-        assertEquals(4, q.dequeue());
-
-        // With output empty, we can accept new enqueues again:
-        q.enqueue(9);
-        q.enqueue(10);
-
-        // Drain the rest in order
-        assertEquals(5, q.dequeue());
-        assertEquals(6, q.dequeue());
-        assertEquals(7, q.dequeue());
-        assertEquals(8, q.dequeue());
-        assertEquals(9, q.dequeue());
-        assertEquals(10, q.dequeue());
+    // Drain the rest in strict FIFO order: 3..9, then 10, 11
+    for (int v = 3; v <= 11; v++) {
+        assertEquals(v, q.dequeue());
     }
+    assertTrue(q.isEmpty());
+}
+
 
     // ========== TRANSFER LOGIC DETAILS ==========
 
@@ -284,22 +281,36 @@ public class TestDoubleStackQueue extends AbstractFactoryClient {
     }
 
     /**
-     * Enqueue must fail when input is full and output still contains items.
+     * Enqueue respects the logical capacity even when output has data.
+     * With internal 2*Q, we can keep enqueueing until total size == Q.
      */
     @Test
-    void enqueueFailsWhenOutputHasDataAndInputIsFull() throws Exception {
-        var q = new impl.DoubleStackQueue(10); // 5+5 halves
-        // Fill input
+    void enqueueStopsOnlyAtLogicalCapacityWhenOutputHasData() throws Exception {
+        var q = new impl.DoubleStackQueue(10); // internal array = 20; halves = 10 each
+
+        // Fill input to 5
         for (int i = 1; i <= 5; i++) {
             q.enqueue(i);
         }
-        // Partially drain to move some into output (transfer), then leave some there
-        assertEquals(1, q.dequeue()); // transfer happens
-        assertEquals(2, q.dequeue()); // output now holds [3,4,5]
-        // Refill input to full again
+
+        // Dequeue twice -> transfer occurs, output now holds [3,4,5]
+        assertEquals(1, q.dequeue());
+        assertEquals(2, q.dequeue());
+        // size = 3
+
+        // We can enqueue up to capacity (total 10). That's 7 more items: 6..12
         q.enqueue(6); q.enqueue(7); q.enqueue(8); q.enqueue(9); q.enqueue(10);
-        // Input is full (5), output not empty (3 items) -> no transfer allowed -> enqueue must fail
-        assertThrows(QueueFullException.class, () -> q.enqueue(11));
+        q.enqueue(11); q.enqueue(12);
+        assertEquals(10, q.size());
+
+        // Next enqueue exceeds logical capacity -> must fail
+        assertThrows(QueueFullException.class, () -> q.enqueue(13));
+
+        // Optional: verify FIFO of the rest: 3..12
+        for (int v = 3; v <= 12; v++) {
+            assertEquals(v, q.dequeue());
+        }
+        assertTrue(q.isEmpty());
     }
 
     /**
@@ -307,7 +318,7 @@ public class TestDoubleStackQueue extends AbstractFactoryClient {
      */
     @Test
     void longInterleavingRemainsFifo() throws Exception {
-        var q = new impl.DoubleStackQueue(6); // 3+3 halves
+        var q = new impl.DoubleStackQueue(6);
         for (int round = 0; round < 20; round++) {
             q.enqueue(round * 3); q.enqueue(round * 3 + 1); q.enqueue(round * 3 + 2);
             assertEquals(round * 3, q.dequeue());
@@ -320,18 +331,29 @@ public class TestDoubleStackQueue extends AbstractFactoryClient {
     }
 
     /**
-     * Ensures size never exceeds the reachable capacity when total size is odd.
+     * With internal 2*Q, even when Q is odd, we can enqueue exactly Q items.
+     * The (old) "wasted middle slot" no longer exists; fullness == size()==Q.
      */
     @Test
-    void sizeNeverExceedsReachableCapacityOdd() throws Exception {
-        var q = new impl.DoubleStackQueue(9); // reachable=8 without dequeues
-        for (int i = 0; i < 8; i++) {
+    void sizeNeverExceedsLogicalCapacityWhenOddQ() throws Exception {
+        var q = new impl.DoubleStackQueue(9); // internal array = 18
+
+        // Enqueue exactly Q items
+        for (int i = 1; i <= 9; i++) {
             q.enqueue(i);
         }
-        assertEquals(8, q.size());
-        // Next enqueue must fail (no room to transfer because output not empty)
-        assertThrows(QueueFullException.class, () -> q.enqueue(999));
+        assertEquals(9, q.size());
+
+        // Next enqueue must fail (logical capacity reached)
+        assertThrows(QueueFullException.class, () -> q.enqueue(10));
+
+        // Optional FIFO check
+        for (int v = 1; v <= 9; v++) {
+            assertEquals(v, q.dequeue());
+        }
+        assertTrue(q.isEmpty());
     }
+
 
 
     /**
@@ -345,6 +367,67 @@ public class TestDoubleStackQueue extends AbstractFactoryClient {
         assertEquals(null, q.dequeue());
         assertEquals("X", q.dequeue());
     }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 17})
+    void fillExactlyToCapacityThenRejectNext(int qSize) throws Exception {
+        IQueue q = new DoubleStackQueue(qSize);
+        for (int i = 1; i <= qSize; i++) {
+            q.enqueue(i);
+        }
+        assertEquals(qSize, q.size());
+        assertThrows(QueueFullException.class, () -> q.enqueue(999));
+        for (int i = 1; i <= qSize; i++) {
+            assertEquals(i, q.dequeue());
+        }
+        assertTrue(q.isEmpty());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {2, 3, 4, 5})
+    void enqueueStopsAtLogicalCapacityWhenOutputHasK(int k) throws Exception {
+        int qSize = 10;
+        IQueue q = new DoubleStackQueue(qSize);
+
+        // Seed input with k+1 then dequeue once -> output holds k
+        for (int i = 1; i <= k + 1; i++) {
+            q.enqueue(i);
+        }
+        assertEquals(1, q.dequeue()); // transfer then pop
+        assertEquals(k, q.size());    // output has k
+
+        // Can enqueue exactly qSize - k more
+        for (int x = 0; x < qSize - k; x++) {
+            q.enqueue(100 + x);
+        }
+        assertEquals(qSize, q.size());
+        assertThrows(QueueFullException.class, () -> q.enqueue(999));
+
+        // Drain FIFO: the k older ones first
+        for (int i = 2; i <= k + 1; i++) {
+            assertEquals(i, q.dequeue());
+        }
+        for (int x = 0; x < qSize - k; x++) {
+            assertEquals(100 + x, q.dequeue());
+        }
+        assertTrue(q.isEmpty());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {5, 10})
+    void singleTransferPerWaveObservable(int qSize) throws Exception {
+        IQueue q = new DoubleStackQueue(qSize);
+        for (int i = 1; i <= qSize; i++) {
+            q.enqueue(i);  // fill
+        }
+        // First dequeue triggers transfer; after that we should get a long FIFO run:
+        for (int i = 1; i <= qSize; i++) {
+            assertEquals(i, q.dequeue());
+        }
+        assertTrue(q.isEmpty());
+    }
+
+
 
 
 

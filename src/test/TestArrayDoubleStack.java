@@ -5,6 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.ParameterizedTest;
+
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import common.AbstractFactoryClient;
@@ -159,5 +163,26 @@ public class TestArrayDoubleStack extends AbstractFactoryClient {
         assertThrows(common.StackOverflowException.class, () -> a.push(99));
         assertThrows(common.StackOverflowException.class, () -> b.push(99));
     }
+
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 17})
+    void eachStackCappedAtFloorHalf(int num) throws Exception {
+        IDoubleStack ds = getFactory().makeDoubleStack(num);
+        IStack a = ds.getFirstStack();
+        IStack b = ds.getSecondStack();
+        int half = num / 2;
+
+        for (int i = 0; i < half; i++) {
+            a.push(i);
+        }
+        assertThrows(common.StackOverflowException.class, () -> a.push(999));
+
+        for (int i = 0; i < half; i++) {
+            b.push(i);
+        }
+        assertThrows(common.StackOverflowException.class, () -> b.push(999));
+    }
+
 
 }

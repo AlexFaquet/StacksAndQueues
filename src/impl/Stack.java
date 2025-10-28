@@ -20,6 +20,11 @@ public class Stack implements IStack {
         this.isFirst = isFirst;
     }
 
+    /**
+     * Pushes an element onto the stack.
+     * @param element the element to push
+     * @throws StackOverflowException if the stack is full
+     */
     @Override
     public void push(Object element) throws StackOverflowException {
         if (top == capacity) {
@@ -34,6 +39,11 @@ public class Stack implements IStack {
         top++;
     }
 
+    /**
+     * Pops an element from the stack.
+     * @return the popped element
+     * @throws StackEmptyException if the stack is empty
+     */
     @Override
     public Object pop() throws StackEmptyException {
         Object poppedItem = null;
@@ -54,6 +64,11 @@ public class Stack implements IStack {
         return poppedItem;
     }
 
+    /**
+     * Returns the top element without removing it.
+     * @return the top element
+     * @throws StackEmptyException if the stack is empty
+     */
     @Override
     public Object top() throws StackEmptyException {
         if (top == 0) {
@@ -68,16 +83,27 @@ public class Stack implements IStack {
         return topElement;
     }
 
+    /**
+     * Returns the number of elements in the stack.
+     * @return the size of the stack
+     */
     @Override
     public int size() {
         return top;
     }
 
+    /**
+     * Checks if the stack is empty.
+     * @return true if the stack is empty, false otherwise
+     */
     @Override
     public boolean isEmpty() {
         return top == 0;
     }
 
+    /**
+     * Clears the stack.
+     */
     @Override
     public void clear() {
         if (isFirst) {
